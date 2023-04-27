@@ -5,6 +5,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
+import math
+from timm.models.layers import trunc_normal_
 
 
 class Bottleneck(nn.Module):
@@ -225,7 +227,20 @@ class VisionTransformer(nn.Module):
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
         x = torch.cat([self.class_embedding.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device), x], dim=1)  # shape = [*, grid ** 2 + 1, width]
-        x = x + self.positional_embedding.to(x.dtype)
+        
+        pos_embed = self.positional_embedding
+        patch_size = self.conv1.kernel_size[0]
+        grid_size = self.input_resolution // patch_size
+        if x.shape[1]-1 != grid_size**2:
+            new_grid_size = int((x.shape[1]-1)**0.5)
+            pos_embed = resize_pos_embed(
+                self.positional_embedding.unsqueeze(0),
+                grid_old_shape=(grid_size, grid_size),
+                grid_new_shape=(new_grid_size, new_grid_size),
+                num_extra_tokens=1
+            ).squeeze(0)
+        
+        x = x + self.pos_embed.to(x.dtype)
         x = self.ln_pre(x)
 
         x = x.permute(1, 0, 2)  # NLD -> LND
@@ -434,3 +449,39 @@ def build_model(state_dict: dict):
     convert_weights(model)
     model.load_state_dict(state_dict)
     return model.eval()
+
+
+def init_weights(m):
+    if isinstance(m, nn.Linear):
+        trunc_normal_(m.weight, std=0.02)
+        if isinstance(m, nn.Linear) and m.bias is not None:
+            nn.init.constant_(m.bias, 0)
+    elif isinstance(m, nn.LayerNorm):
+        nn.init.constant_(m.bias, 0)
+        nn.init.constant_(m.weight, 1.0)
+    elif isinstance(m, nn.Conv2d):
+        nn.init.xavier_uniform_(m.weight)
+        if m.bias is not None:
+            nn.init.constant_(m.bias, 0.)
+
+
+
+def resize_pos_embed(posemb, grid_old_shape, grid_new_shape, num_extra_tokens):
+    # Rescale the grid of position embeddings when loading from state_dict. Adapted from
+    # https://github.com/google-research/vision_transformer/blob/00883dd691c63a6830751563748663526e811cee/vit_jax/checkpoint.py#L224
+    posemb_tok, posemb_grid = (
+        posemb[:, :num_extra_tokens],
+        posemb[0, num_extra_tokens:],
+    )
+    if grid_old_shape is None:
+        gs_old_h = int(math.sqrt(len(posemb_grid)))
+        gs_old_w = gs_old_h
+    else:
+        gs_old_h, gs_old_w = grid_old_shape
+
+    gs_h, gs_w = grid_new_shape
+    posemb_grid = posemb_grid.reshape(1, gs_old_h, gs_old_w, -1).permute(0, 3, 1, 2)
+    posemb_grid = F.interpolate(posemb_grid, size=(gs_h, gs_w), mode="bilinear")
+    posemb_grid = posemb_grid.permute(0, 2, 3, 1).reshape(1, gs_h * gs_w, -1)
+    posemb = torch.cat([posemb_tok, posemb_grid], dim=1)
+    return posemb
