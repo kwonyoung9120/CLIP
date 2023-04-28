@@ -240,7 +240,7 @@ class VisionTransformer(nn.Module):
                 num_extra_tokens=1
             ).squeeze(0)
         
-        x = x + self.pos_embed.to(x.dtype)
+        x = x + pos_embed.to(x.dtype)
         x = self.ln_pre(x)
 
         x = x.permute(1, 0, 2)  # NLD -> LND
