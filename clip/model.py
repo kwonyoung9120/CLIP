@@ -239,24 +239,19 @@ class VisionTransformer(nn.Module):
                 grid_new_shape=(new_grid_size, new_grid_size),
                 num_extra_tokens=1
             ).squeeze(0)
-        import pdb; pdb.set_trace()
         x = x + pos_embed.to(x.dtype)
         x = self.ln_pre(x)
 
-        import pdb; pdb.set_trace()
-
         x = x.permute(1, 0, 2)  # NLD -> LND
-        x_out = self.transformer(x)
+        x = self.transformer(x)
 
-        import pdb; pdb.set_trace()
-        x = x_out.permute(1, 0, 2)  # LND -> NLD
+        x_out = x.permute(1, 0, 2)  # LND -> NLD
 
-        x = self.ln_post(x[:, 0, :])
-        import pdb; pdb.set_trace()
+        x = self.ln_post(x_out[:, 0, :])
 
         if self.proj is not None:
             x = x @ self.proj
-        import pdb; pdb.set_trace()
+
         return x, x_out
 
 
