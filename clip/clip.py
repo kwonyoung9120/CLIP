@@ -10,8 +10,10 @@ from PIL import Image
 from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
 from tqdm import tqdm
 
-from .model import build_model
-from .simple_tokenizer import SimpleTokenizer as _Tokenizer
+#from .model import build_model
+#from .simple_tokenizer import SimpleTokenizer as _Tokenizer
+from model import build_model
+from simple_tokenizer import SimpleTokenizer as _Tokenizer
 
 try:
     from torchvision.transforms import InterpolationMode
@@ -235,3 +237,10 @@ def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: b
         result[i, :len(tokens)] = torch.tensor(tokens)
 
     return result
+
+if __name__=="__main__":
+    model, preprocess = load("ViT-L/14")
+    device = "cuda"
+    image_0 = Image.open('~/000000.png')
+    image_0 = (image_0.unsqueeze(0)).to(device)
+    x = model(image_0)
