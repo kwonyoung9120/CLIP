@@ -252,8 +252,7 @@ class VisionTransformer(nn.Module):
 
         if self.proj is not None:
             cls_tok = cls_tok @ self.proj
-            if self.patch_projection:
-                patches = patches @ self.proj
+            patches = patches @ self.proj
 
         return cls_tok, patches
 
